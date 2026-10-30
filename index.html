@@ -85,94 +85,117 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
   <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      // 1. Inisialisasi Peta
-      const map = L.map('map');
+   document.addEventListener("DOMContentLoaded", function() {
+  // 1. Inisialisasi Peta
+  const map = L.map('map');
 
-      // 2. Tile Layer Esri World Topo Map (Bebas Error 403 & Gratis)
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: 'Tiles &copy; Esri'
-      }).addTo(map);
+  // 2. Tile Layer Esri Topo
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: 'Tiles &copy; Esri'
+  }).addTo(map);
 
-      // 3. Garis Rute Event (Polyline Merah)
-      const routeCoordinates = [
-        [-6.1754, 106.8272], // Jakarta
-        [-6.8915, 107.6107], // Bandung
-        [-6.9932, 110.4203], // Semarang
-        [-7.2575, 112.7521], // Surabaya
-        [-8.2192, 114.3691]  // Banyuwangi
-      ];
+  // 3. Titik-Titik Detail Jalur Rute (Start -> Finish)
+  const routeCoordinates = [
+    [-6.1754, 106.8272], // 0. Jakarta (Start)
+    [-6.5971, 106.7996], // 1. Bogor
+    [-6.8915, 107.6107], // 2. Bandung
+    [-6.8797, 108.2162], // 3. Majalengka
+    [-6.8383, 108.5663], // 4. Cirebon
+    [-6.8694, 109.1402], // 5. Tegal
+    [-6.8886, 109.6753], // 6. Pekalongan
+    [-6.9932, 110.4203], // 7. Semarang
+    [-7.5561, 110.8317], // 8. Solo
+    [-7.4478, 112.7183], // 9. Sidoarjo
+    [-7.2575, 112.7521], // 10. Surabaya
+    [-7.7569, 113.2115], // 11. Probolinggo
+    [-8.1724, 113.7003], // 12. Jember
+    [-8.2192, 114.3691]  // 13. Banyuwangi (Finish)
+  ];
 
-      const polyline = L.polyline(routeCoordinates, { color: '#ff4757', weight: 4, opacity: 0.8 }).addTo(map);
-      map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+  // Gambar Garis Rute Utama
+  const polyline = L.polyline(routeCoordinates, { color: '#ff4757', weight: 4, opacity: 0.8 }).addTo(map);
+  map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
 
-      // 4. Object Penyimpan Marker
-      const riderMarkers = {};
+  // 4. Wadah Marker Peta
+  const riderMarkers = {};
 
-      // 5. Fungsi Render Sidebar & Update Posisi Marker Peta
-      function updateDashboard(ridersData) {
-        const riderListContainer = document.getElementById('riderList');
-        riderListContainer.innerHTML = '';
+  // 5. Daftar 10 Peserta Contoh
+  const riders = [
+    { id: "R01", bib: "01", name: "Budi Santoso", routeIndex: 0, speed: 28, battery: 92 },
+    { id: "R02", bib: "02", name: "Siti Rahma", routeIndex: 1, speed: 25, battery: 88 },
+    { id: "R03", bib: "03", name: "Agus Pratama", routeIndex: 3, speed: 30, battery: 75 },
+    { id: "R04", bib: "04", name: "Dewi Lestari", routeIndex: 4, speed: 22, battery: 95 },
+    { id: "R05", bib: "05", name: "Eko Prasetyo", routeIndex: 6, speed: 27, battery: 60 },
+    { id: "R06", bib: "06", name: "Fajar Nugraha", routeIndex: 7, speed: 31, battery: 82 },
+    { id: "R07", bib: "07", name: "Gita Gutawa", routeIndex: 9, speed: 24, battery: 70 },
+    { id: "R08", bib: "08", name: "Hendra Wijaya", routeIndex: 10, speed: 29, battery: 55 },
+    { id: "R09", bib: "09", name: "Indah Permata", routeIndex: 11, speed: 26, battery: 85 },
+    { id: "R10", bib: "10", name: "Joko Widodo", routeIndex: 12, speed: 32, battery: 40 }
+  ];
 
-        ridersData.forEach(rider => {
-          const latLng = [rider.lat, rider.lng];
+  // 6. Fungsi Update Posisi Peserta & Sidebar
+  function updateDashboard() {
+    const riderListContainer = document.getElementById('riderList');
+    riderListContainer.innerHTML = ''; // Reset list sidebar
 
-          // UPDATE / CREATE MARKER PETA
-          if (riderMarkers[rider.id]) {
-            riderMarkers[rider.id].setLatLng(latLng);
-            riderMarkers[rider.id].getPopup().setContent(`
-              <b>#${rider.bib} ${rider.name}</b><br>
-              Speed: ${rider.speed} km/h<br>
-              Battery: ${rider.battery}%
-            `);
-          } else {
-            riderMarkers[rider.id] = L.marker(latLng).addTo(map)
-              .bindPopup(`
-                <b>#${rider.bib} ${rider.name}</b><br>
-                Speed: ${rider.speed} km/h<br>
-                Battery: ${rider.battery}%
-              `);
-          }
+    // Urutkan leaderboard berdasarkan siapa yang paling depan (routeIndex terbesar)
+    const sortedRiders = [...riders].sort((a, b) => b.routeIndex - a.routeIndex);
 
-          // RENDER CARD SIDEBAR
-          const card = document.createElement('div');
-          card.className = 'rider-card';
-          card.innerHTML = `
-            <div class="rider-name">#${rider.bib} - ${rider.name}</div>
-            <div class="rider-info">
-              <span>Spd: ${rider.speed} km/h</span>
-              <span>Bat: ${rider.battery}%</span>
-            </div>
-          `;
+    sortedRiders.forEach(rider => {
+      const latLng = routeCoordinates[rider.routeIndex];
 
-          // Klik Card -> Camera FlyTo Peserta
-          card.onclick = function() {
-            map.flyTo(latLng, 13, { duration: 1.5 });
-            riderMarkers[rider.id].openPopup();
-          };
-
-          riderListContainer.appendChild(card);
-        });
+      // Update / Buat Marker di Peta
+      if (riderMarkers[rider.id]) {
+        riderMarkers[rider.id].setLatLng(latLng);
+        riderMarkers[rider.id].getPopup().setContent(`
+          <b>#${rider.bib} ${rider.name}</b><br>
+          Kecepatan: ${rider.speed} km/h<br>
+          Baterai: ${rider.battery}%
+        `);
+      } else {
+        riderMarkers[rider.id] = L.marker(latLng).addTo(map)
+          .bindPopup(`
+            <b>#${rider.bib} ${rider.name}</b><br>
+            Kecepatan: ${rider.speed} km/h<br>
+            Baterai: ${rider.battery}%
+          `);
       }
 
-      // 6. SIMULASI DATA REAL-TIME
-      function fetchLatestData() {
-        const mockRiders = [
-          { id: "R01", bib: "01", name: "Budi Santoso", lat: -6.5000 + (Math.random() * 0.03), lng: 107.2000 + (Math.random() * 0.03), speed: 27, battery: 88 },
-          { id: "R02", bib: "05", name: "Siti Rahma", lat: -6.8915 + (Math.random() * 0.03), lng: 107.6107 + (Math.random() * 0.03), speed: 21, battery: 95 },
-          { id: "R03", bib: "12", name: "Agus Pratama", lat: -6.9932 + (Math.random() * 0.03), lng: 110.4203 + (Math.random() * 0.03), speed: 30, battery: 64 }
-        ];
+      // Render Card di Sidebar
+      const card = document.createElement('div');
+      card.className = 'rider-card';
+      card.innerHTML = `
+        <div class="rider-name">#${rider.bib} - ${rider.name}</div>
+        <div class="rider-info">
+          <span>Spd: ${rider.speed} km/h</span>
+          <span>Bat: ${rider.battery}%</span>
+        </div>
+      `;
 
-        updateDashboard(mockRiders);
+      // Klik peserta di sidebar -> Kamera meluncur ke posisi peserta
+      card.onclick = function() {
+        map.flyTo(latLng, 12, { duration: 1.5 });
+        riderMarkers[rider.id].openPopup();
+      };
+
+      riderListContainer.appendChild(card);
+
+      // Pergerakan Simulasi: Maju 1 titik setiap interval
+      if (rider.routeIndex < routeCoordinates.length - 1) {
+        rider.routeIndex++;
+      } else {
+        rider.routeIndex = 0; // Reset ke start jika sudah finish
       }
-
-      fetchLatestData();
-      setInterval(fetchLatestData, 5000);
-
-      setTimeout(() => { map.invalidateSize(); }, 300);
     });
-  </script>
+  }
+
+  // Jalankan update pertama kali dan ulang setiap 3 detik
+  updateDashboard();
+  setInterval(updateDashboard, 3000);
+
+  setTimeout(() => { map.invalidateSize(); }, 300);
+});
 
 </body>
 </html>
