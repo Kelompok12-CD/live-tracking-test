@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Tracking Viewer - Bentang Jawa</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Chart.js untuk Grafik Elevasi -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; width: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    
+    body { display: flex; overflow: hidden; }
+    
+    /* Layout: Sidebar & Area Peta */
+    #sidebar {
+      width: 340px;
+      background: #1e1e24;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      z-index: 1001;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+    }
+    
+    #main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #map {
+      flex: 1;
+      width: 100%;
+      background-color: #e5e3df;
+    }
+
+    /* Panel Elevation Profile di Bawah Peta */
+    #elevation-panel {
+      height: 160px;
+      background: #111116;
+      border-top: 1px solid #333;
+      padding: 10px 15px;
+      position: relative;
+    }
+
+    #elevation-panel h4 {
+      margin: 0 0 5px 0;
+      color: #ff4757;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Sidebar Header */
+    .sidebar-header {
+      padding: 15px;
+      background: #111116;
+      border-bottom: 1px solid #333;
+    }
+    
+    .sidebar-header h3 { margin: 0 0 5px 0; color: #ff4757; font-size: 18px; }
+    .status-badge { font-size: 12px; color: #2ed573; font-weight: bold; }
+
+    /* Daftar Peserta (Leaderboard) */
+    .rider-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    .rider-card {
+      background: #2b2b36;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border-left: 4px solid #ff4757;
+    }
+
+    .rider-card:hover { background: #3a3a49; }
+    .rider-name { font-weight: bold; font-size: 14px; margin-bottom: 6px; }
+    
+    .rider-info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      font-size: 11px;
+      color: #a4b0be;
+    }
+
+    .rider-coords {
+      grid-column: span 2;
+      font-size: 10px;
+      color: #747d8c;
+      margin-top: 4px;
+      border-top: 1px dashed #3a3a49;
+      padding-top: 4px;
+    }
+
+    .hr-badge { color: #ff6b6b; font-weight: bold; }
+
+    /* Transisi Gerak Marker 5 Detik */
+    .leaflet-marker-icon {
+      transition: transform 5s linear !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar Penonton -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <h3>BENTANG JAWA LIVE</h3>
+      <span class="status-badge">● LIVE TRACKING ACTIVE</span>
+    </div>
+    
+    <div class="rider-list" id="riderList">
+      <!-- Card Peserta Di-generate Otomatis oleh JS -->
+    </div>
+  </div>
+
+  <!-- Area Peta & Elevasi -->
+  <div id="main-content">
+    <div id="map"></div>
+    
+    <!-- Panel Grafik Elevasi -->
+    <div id="elevation-panel">
+      <h4>Elevation Profile (Rute Bentang Jawa)</h4>
+      <canvas id="elevationChart" style="max-height: 110px;"></canvas>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      // 1. Inisialisasi Peta
+      const map = L.map('map');
+
+      // 2. Tile Layer Esri Topo
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri'
+      }).addTo(map);
+
+      // 3. Data Rute Lengkap dengan Elevasi (Ketinggian mdpl)
+      const routeCoordinates = [
+        { latlng: [-6.1754, 106.8272], ele: 8,   name: "Jakarta" },
+        { latlng: [-6.5971, 106.7996], ele: 265, name: "Bogor" },
+        { latlng: [-6.8915, 107.6107], ele: 768, name: "Bandung" },
+        { latlng: [-6.8797, 108.2162], ele: 120, name: "Majalengka" },
+        { latlng: [-6.8383, 108.5663], ele: 5,   name: "Cirebon" },
+        { latlng: [-6.8694, 109.1402], ele: 10,  name: "Tegal" },
+        { latlng: [-6.8886, 109.6753], ele: 15,  name: "Pekalongan" },
+        { latlng: [-6.9932, 110.4203], ele: 12,  name: "Semarang" },
+        { latlng: [-7.5561, 110.8317], ele: 105, name: "Solo" },
+        { latlng: [-7.4478, 112.7183], ele: 8,   name: "Sidoarjo" },
+        { latlng: [-7.2575, 112.7521], ele: 5,   name: "Surabaya" },
+        { latlng: [-7.7569, 113.2115], ele: 20,  name: "Probolinggo" },
+        { latlng: [-8.1724, 113.7003], ele: 83,  name: "Jember" },
+        { latlng: [-8.2192, 114.3691], ele: 15,  name: "Banyuwangi" }
+      ];
+
+      // Format array koordinat untuk Leaflet Polyline
+      const pathPoints = routeCoordinates.map(r => r.latlng);
+
+      // Gambar Garis Rute Utama
+      const polyline = L.polyline(pathPoints, { color: '#ff4757', weight: 4, opacity: 0.8 }).addTo(map);
+      map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+
+      // 4. Render Grafik Elevasi (Chart.js)
+      const ctx = document.getElementById('elevationChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: routeCoordinates.map(r => r.name),
+          datasets: [{
+            label: 'Ketinggian (mdpl)',
+            data: routeCoordinates.map(r => r.ele),
+            borderColor: '#ff4757',
+            backgroundColor: 'rgba(255, 71, 87, 0.2)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 2,
+            pointRadius: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#888', font: { size: 10 } }, grid: { display: false } },
+            y: { ticks: { color: '#888', font: { size: 10 } }, grid: { color: '#222' } }
+          }
+        }
+      });
+
+      // 5. Wadah Marker Peta
+      const riderMarkers = {};
+
+      // 6. Daftar 10 Peserta dengan Data Heart Rate (HR)
+      const riders = [
+        { id: "R01", bib: "01", name: "Budi Santoso", routeIndex: 0, speed: 28, battery: 92, hr: 142 },
+        { id: "R02", bib: "02", name: "Siti Rahma", routeIndex: 1, speed: 25, battery: 88, hr: 155 },
+        { id: "R03", bib: "03", name: "Agus Pratama", routeIndex: 3, speed: 30, battery: 75, hr: 168 },
+        { id: "R04", bib: "04", name: "Dewi Lestari", routeIndex: 4, speed: 22, battery: 95, hr: 135 },
+        { id: "R05", bib: "05", name: "Eko Prasetyo", routeIndex: 6, speed: 27, battery: 60, hr: 148 },
+        { id: "R06", bib: "06", name: "Fajar Nugraha", routeIndex: 7, speed: 31, battery: 82, hr: 162 },
+        { id: "R07", bib: "07", name: "Gita Gutawa", routeIndex: 9, speed: 24, battery: 70, hr: 138 },
+        { id: "R08", bib: "08", name: "Hendra Wijaya", routeIndex: 10, speed: 29, battery: 55, hr: 150 },
+        { id: "R09", bib: "09", name: "Indah Permata", routeIndex: 11, speed: 26, battery: 85, hr: 145 },
+        { id: "R10", bib: "10", name: "Joko Widodo", routeIndex: 12, speed: 32, battery: 40, hr: 172 }
+      ];
+
+      // 7. Fungsi Update Posisi Peserta & UI
+      function updateDashboard() {
+        const riderListContainer = document.getElementById('riderList');
+        riderListContainer.innerHTML = '';
+
+        // Urutkan leaderboard dari peserta terdepan
+        const sortedRiders = [...riders].sort((a, b) => b.routeIndex - a.routeIndex);
+
+        sortedRiders.forEach(rider => {
+          const pointData = routeCoordinates[rider.routeIndex];
+          const latLng = pointData.latlng;
+          const ele = pointData.ele;
+          const latFixed = latLng[0].toFixed(4);
+          const lngFixed = latLng[1].toFixed(4);
+
+          // Variasi Heart Rate Dinamis kecil untuk simulasi
+          const currentHR = rider.hr + Math.floor(Math.random() * 5 - 2);
+
+          // Isi Konten Popup Peta
+          const popupContent = `
+            <div style="font-size:12px;">
+              <b style="color:#ff4757;">#${rider.bib} ${rider.name}</b><br>
+              <b>Spd:</b> ${rider.speed} km/h | <b>Ele:</b> ${ele} m<br>
+              <b>HR:</b> <span style="color:#ff4757;font-weight:bold;">♥ ${currentHR} BPM</span> | <b>Bat:</b> ${rider.battery}%<br>
+              <div style="font-size:10px; color:#555; margin-top:3px;">
+                <b>GPS:</b> ${latFixed}, ${lngFixed}
+              </div>
+            </div>
+          `;
+
+          // Update / Buat Marker di Peta
+          if (riderMarkers[rider.id]) {
+            riderMarkers[rider.id].setLatLng(latLng);
+            riderMarkers[rider.id].getPopup().setContent(popupContent);
+          } else {
+            riderMarkers[rider.id] = L.marker(latLng).addTo(map).bindPopup(popupContent);
+          }
+
+          // Render Card di Sidebar Leaderboard
+          const card = document.createElement('div');
+          card.className = 'rider-card';
+          card.innerHTML = `
+            <div class="rider-name">#${rider.bib} - ${rider.name}</div>
+            <div class="rider-info-grid">
+              <span>Spd: <b>${rider.speed} km/h</b></span>
+              <span>Ele: <b>${ele} m</b></span>
+              <span>HR: <b class="hr-badge">♥ ${currentHR}</b></span>
+              <span>Bat: <b>${rider.battery}%</b></span>
+              <div class="rider-coords">Lat: ${latFixed} | Lng: ${lngFixed}</div>
+            </div>
+          `;
+
+          card.onclick = function() {
+            map.flyTo(latLng, 12, { duration: 1.5 });
+            riderMarkers[rider.id].openPopup();
+          };
+
+          riderListContainer.appendChild(card);
+
+          // Pergerakan Simulasi
+          if (rider.routeIndex < routeCoordinates.length - 1) {
+            rider.routeIndex++;
+          } else {
+            rider.routeIndex = 0;
+          }
+        });
+      }
+
+      // Interval pembaruan 6 detik
+      updateDashboard();
+      setInterval(updateDashboard, 6000);
+
+      setTimeout(() => { map.invalidateSize(); }, 300);
+    });
+  </script>
+
+</body>
+</html>
