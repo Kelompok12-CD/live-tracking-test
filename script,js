@@ -1,47 +1,56 @@
-// 1. Inisialisasi Peta Leaflet
-const map = L.map('map').setView([-6.200000, 106.816666], 13);
+// 1. Inisialisasi Peta Leaflet (Posisi Default Purwokerto/Banyumas)
+const map = L.map('map').setView([-7.421553, 109.225044], 13);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
-// 2. Load File Rute & Checkpoint (.gpx) dari GitHub
+// 2. Load File Rute GPX dari Komoot / Plotaroute
 new L.GPX('rute.gpx', {
   async: true,
   polyline_options: {
     color: '#0066ff',
     opacity: 0.8,
     weight: 5
-  },
-  marker_options: {
-    startIconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
-    endIconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
-    wptIconUrls: {
-      '': 'https://cdn-icons-png.flaticon.com/512/684/684908.png'
-    }
   }
 }).on('loaded', function(e) {
   map.fitBounds(e.target.getBounds());
 }).addTo(map);
 
-// 3. Marker Tracker ESP32
+// 3. Marker Tracker Hardware
 let trackerMarker = L.marker([0, 0]).addTo(map);
 
-// 4. Konfigurasi Client Supabase (Tempat Penyimpanan Data Broker/Server)
-const SUPABASE_URL = "https://PROJECT_ID_ANDA.supabase.co";
-const SUPABASE_KEY = "API_KEY_ANON_ANDA";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// 4. Salin Channel ID dari Dashboard ThingSpeak Anda di sini
+const CHANNEL_ID = "3570005"; 
 
-// 5. Berlangganan (Subscribe) Perubahan Data Real-time
-supabase
-  .channel('public:location')
-  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'gps_logs' }, payload => {
-    const { lat, lng } = payload.new;
-    console.log("Koordinat Baru Diterima:", lat, lng);
-    
-    // Perbarui posisi marker di peta Leaflet
-    const newPos = [lat, lng];
-    trackerMarker.setLatLng(newPos);
-    map.panTo(newPos);
-  })
-  .subscribe();
+async function fetchRealtimeGPS() {
+  try {
+    const response = await fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds/last.json`);
+    const data = await response.json();
+
+    if (data.field1 && data.field2) {
+      const lat = parseFloat(data.field1);
+      const lng = parseFloat(data.field2);
+      const rfidUID = data.field3 || "Tidak Ada Tap";
+      const newPos = [lat, lng];
+
+      // Update posisi marker & isi Pop-up RFID
+      trackerMarker.setLatLng(newPos);
+      trackerMarker.bindPopup(`
+        <b>Status Perangkat Tracker</b><br>
+        <b>Lat:</b> ${lat}<br>
+        <b>Lng:</b> ${lng}<br>
+        <b>RFID UID:</b> <span style="color:red;">${rfidUID}</span>
+      `).openPopup();
+      
+      map.panTo(newPos);
+      console.log("Data Terbaru Diterima:", newPos, rfidUID);
+    }
+  } catch (error) {
+    console.error("Gagal membaca data dari ThingSpeak:", error);
+  }
+}
+
+// Polling data otomatis setiap 15 detik
+setInterval(fetchRealtimeGPS, 15000);
+fetchRealtimeGPS();
