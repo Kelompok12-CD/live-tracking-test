@@ -40,7 +40,7 @@ checkpoints.forEach(cp => {
 let trackerMarker = L.marker([0, 0]).addTo(map);
 
 // 5. Masukkan ID Channel ThingSpeak Anda di sini
-const CHANNEL_ID = "ID_CHANNEL_ANDA"; 
+const CHANNEL_ID = "3570005"; 
 
 async function fetchRealtimeGPS() {
   try {
