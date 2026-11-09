@@ -3,58 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Realtime GPS Tracker & RFID Checkpoint</title>
+  <title>Realtime GPS Tracker & Checkpoint</title>
   
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      width: 100%;
-    }
-    #map {
-      height: 100vh;
-      width: 100%;
-    }
+    html, body { margin: 0; padding: 0; height: 100%; width: 100%; }
+    #map { height: 100vh; width: 100%; }
   </style>
 </head>
 <body>
 
   <div id="map"></div>
 
-  <!-- Leaflet JS & GPX Plugin -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
   
   <script>
-    // 1. Inisialisasi Peta Leaflet (Lokasi Default Purwokerto)
-    const map = L.map('map').setView([-7.4061585, 109.2606522], 14);
+    // 1. Inisialisasi Peta
+    const map = L.map('map').setView([-7.406158, 109.260645], 14);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // 2. Load File Rute GPX (Ganti Live_Tracking_TestCapstone12.gpx jika nama file di GitHub beda)
-    new L.GPX('Live_Tracking_TestCapstone12.gpx', {
-      async: true,
-      marker_options: {
-        startIconUrl: null,
-        endIconUrl: null,
-        shadowUrl: null
-      },
-      polyline_options: {
-        color: '#0066ff',
-        opacity: 0.8,
-        weight: 5
-      }
-    }).on('loaded', function(e) {
-      map.fitBounds(e.target.getBounds());
-    }).addTo(map);
+    // 2. Data Koordinat Rute (Diambil langsung dari file GPX Anda)
+    const routeCoordinates = [
+      [-7.4061585, 109.2606522],
+      [-7.4061621, 109.2602053],
+      [-7.4069303, 109.2602107],
+      [-7.4076140, 109.2593363],
+      [-7.4102890, 109.2611575],
+      [-7.4128554, 109.2623162],
+      [-7.4130807, 109.2614150],
+      [-7.4133779, 109.2604011],
+      [-7.4143650, 109.2566992],
+      [-7.4150481, 109.2540979],
+      [-7.4101980, 109.2539048],
+      [-7.4071150, 109.2526569],
+      [-7.4050080, 109.2518041],
+      [-7.4044669, 109.2548296],
+      [-7.4037607, 109.2564046],
+      [-7.4075462, 109.2592767],
+      [-7.4069035, 109.2601447],
+      [-7.4058429, 109.2601329],
+      [-7.4058190, 109.2611521],
+      [-7.4061592, 109.2609188],
+      [-7.4061568, 109.2606452]
+    ];
 
-    // 3. Checkpoint Statis (Diambil langsung dari Waypoint GPX Anda)
+    // Gambar Garis Rute Biru
+    const polyline = L.polyline(routeCoordinates, {color: '#0066ff', weight: 5, opacity: 0.8}).addTo(map);
+    map.fitBounds(polyline.getBounds());
+
+    // 3. Marker Checkpoint
     const checkpoints = [
       { lat: -7.414365, lng: 109.2566992, name: "CHECKPOINT 1" },
       { lat: -7.407115, lng: 109.2526569, name: "CHECKPOINT 2" },
@@ -62,16 +63,15 @@
     ];
 
     checkpoints.forEach(cp => {
-      L.marker([cp.lat, cp.lng])
-        .addTo(map)
-        .bindPopup(`<b>${cp.name}</b>`);
+      L.marker([cp.lat, cp.lng]).addTo(map).bindPopup(`<b>${cp.name}</b>`);
     });
 
-    // 4. Marker Real-Time Pelacak ESP32
-    let trackerMarker = L.marker([0, 0]).addTo(map);
+    // 4. Marker Pelacak Real-Time ESP32
+    let trackerMarker = L.marker([-7.406158, 109.260645]).addTo(map);
+    trackerMarker.bindPopup("Tracker Siap Memantau...");
 
-    // 5. Konfigurasi ThingSpeak
-    const CHANNEL_ID = "3570005"; // MASUKKAN KODE ANGKA CHANNEL ID THINGSPEAK ANDA DI SINI
+    // 5. Fetch ThingSpeak
+    const CHANNEL_ID = "3570005"; // Ganti dengan ID Channel Anda jika berbeda
 
     async function fetchRealtimeGPS() {
       if (!CHANNEL_ID || CHANNEL_ID === "ID_CHANNEL_ANDA") return;
